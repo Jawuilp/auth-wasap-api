@@ -5,7 +5,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
 import authRoutes from './routes/auth.js';
-import errorHandler from './middleware/errorHandler.js';
+import errorHandler from './middleware/middleware_errorHandler.js';
 import { initializeDatabase } from './dbFactory.js';
 
 // Load environment variables
