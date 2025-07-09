@@ -135,7 +135,15 @@ router.get('/profile', verifyToken, async (req, res, next) => {
         code: 'USER_NOT_FOUND'
       });
     }
-    const { verificationCode, ...userData } = user; // Exclude verificationCode
+
+    // Explicitly construct userData to ensure consistency across MongoDB and PostgreSQL
+    const userData = {
+      id: user.id || user._id,
+      phoneNumber: user.phoneNumber,
+      isVerified: user.isVerified,
+      createdAt: user.createdAt
+    };
+
     res.status(200).json(userData);
   } catch (error) {
     next(error);
