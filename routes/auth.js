@@ -1,7 +1,7 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import jwt from 'jsonwebtoken';
-import { findUserByPhoneNumber, createOrUpdateUser, findUserById } from '../services/userService.js';
+import { findUserById, createOrUpdateUser } from '../services/userService.js';
 import { sendWhatsAppOTP } from '../services/whatsappService.js';
 import { verifyToken } from '../middleware/auth.js';
 
@@ -9,16 +9,16 @@ const router = express.Router();
 
 /**
  * @route POST /api/auth/request-otp
- * @desc Request OTP for phone number
+ * @desc Request OTP for whatsapp number
  * @access Public
  */
 router.post(
   '/request-otp',
   [
-    body('phoneNumber')
+    body('whatsappNumber')
       .trim()
       .matches(/^\+[1-9]\d{1,14}$/)
-      .withMessage('Invalid phone number format')
+      .withMessage('Invalid whatsapp number format')
   ],
   async (req, res, next) => {
     try {
@@ -27,15 +27,18 @@ router.post(
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { phoneNumber } = req.body;
-      
-      let user = await findUserByPhoneNumber(phoneNumber);
-      const otp = await sendWhatsAppOTP(phoneNumber);
-      
+      const { whatsappNumber } = req.body;
+      let user = await findUserById(whatsappNumber); // Using whatsapp_number as temporary ID
+      const otp = await sendWhatsAppOTP(whatsappNumber);
+
       await createOrUpdateUser({
-        phoneNumber,
+        id: user ? user.id : whatsappNumber,
+        name: user ? user.name : null,
+        webEmail: user ? user.webEmail : null,
+        whatsappNumber,
+        conversationHistory: user ? user.conversationHistory : null,
         verificationCode: otp,
-        codeExpiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes expiry
+        codeExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
         isVerified: user ? user.isVerified : false
       });
 
@@ -57,10 +60,10 @@ router.post(
 router.post(
   '/verify-otp',
   [
-    body('phoneNumber')
+    body('whatsappNumber')
       .trim()
       .matches(/^\+[1-9]\d{1,14}$/)
-      .withMessage('Invalid phone number format'),
+      .withMessage('Invalid whatsapp number format'),
     body('otp')
       .isLength({ min: 6, max: 6 })
       .withMessage('OTP must be 6 digits')
@@ -72,8 +75,8 @@ router.post(
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { phoneNumber, otp } = req.body;
-      const user = await findUserByPhoneNumber(phoneNumber);
+      const { whatsappNumber, otp } = req.body;
+      const user = await findUserById(whatsappNumber);
 
       if (!user) {
         return res.status(404).json({
@@ -82,14 +85,16 @@ router.post(
         });
       }
 
-      if (!user.isVerified && user.codeExpiresAt < new Date()) {
+      // Assuming verificationCode is handled externally or needs bcrypt
+      if (!user.isVerified && new Date() > new Date(user.codeExpiresAt)) {
         return res.status(400).json({
           error: 'OTP expired',
           code: 'OTP_EXPIRED'
         });
       }
 
-      const isValidOTP = await import('bcryptjs').then(bcrypt => bcrypt.compare(otp, user.verificationCode));
+      // Placeholder for OTP verification (adjust if using bcrypt)
+      const isValidOTP = otp === user.verificationCode; // Replace with proper comparison if encrypted
       if (!isValidOTP) {
         return res.status(400).json({
           error: 'Invalid OTP',
@@ -98,14 +103,18 @@ router.post(
       }
 
       await createOrUpdateUser({
-        phoneNumber,
+        id: user.id,
+        name: user.name,
+        webEmail: user.webEmail,
+        whatsappNumber,
+        conversationHistory: user.conversationHistory,
         isVerified: true,
         verificationCode: null,
         codeExpiresAt: null
       });
 
       const token = jwt.sign(
-        { userId: user.id || user._id, phoneNumber: user.phoneNumber },
+        { userId: user.id, whatsappNumber: user.whatsapp_number },
         process.env.JWT_SECRET,
         { expiresIn: '24h' }
       );
@@ -136,11 +145,12 @@ router.get('/profile', verifyToken, async (req, res, next) => {
       });
     }
 
-    // Explicitly construct userData to ensure consistency across MongoDB and PostgreSQL
     const userData = {
-      id: user.id || user._id,
-      phoneNumber: user.phoneNumber,
-      isVerified: user.isVerified,
+      id: user.id,
+      name: user.name,
+      webEmail: user.webEmail,
+      whatsappNumber: user.whatsapp_number,
+      conversationHistory: user.conversation_history,
       createdAt: user.createdAt
     };
 

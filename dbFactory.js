@@ -1,8 +1,10 @@
 import mongoose from 'mongoose';
 import { Sequelize } from 'sequelize';
+import { createClient } from '@supabase/supabase-js';
 import defineUserPostgres from './models/UserPostgres.js';
 
 let dbInstance = null;
+let supabaseInstance = null;
 
 async function initializeMongoDB() {
   try {
@@ -35,6 +37,17 @@ async function initializePostgres() {
   }
 }
 
+async function initializeSupabase() {
+  try {
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+    console.log('Connected to Supabase');
+    return supabase;
+  } catch (err) {
+    console.error('Supabase connection error:', err);
+    throw err;
+  }
+}
+
 export async function initializeDatabase() {
   const dbType = process.env.DB_TYPE || 'mongodb';
   
@@ -42,8 +55,11 @@ export async function initializeDatabase() {
     dbInstance = await initializeMongoDB();
   } else if (dbType === 'postgres') {
     dbInstance = await initializePostgres();
+  } else if (dbType === 'supabase') {
+    dbInstance = await initializeSupabase();
+    supabaseInstance = dbInstance;
   } else {
-    throw new Error('Invalid DB_TYPE. Use "mongodb" or "postgres".');
+    throw new Error('Invalid DB_TYPE. Use "mongodb", "postgres", or "supabase".');
   }
   
   return dbInstance;
@@ -54,4 +70,11 @@ export function getDatabaseInstance() {
     throw new Error('Database not initialized');
   }
   return dbInstance;
+}
+
+export function getSupabaseInstance() {
+  if (!supabaseInstance) {
+    throw new Error('Supabase not initialized');
+  }
+  return supabaseInstance;
 }
