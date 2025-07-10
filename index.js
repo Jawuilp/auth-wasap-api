@@ -37,6 +37,11 @@ app.use(limiter);
 // Routes
 app.use('/api/auth', authRoutes);
 
+app.get('/', (req, res) => {
+  res.send('¡Hola desde la API auth!');
+});
+
+
 // Error handling middleware
 app.use(errorHandler);
 
