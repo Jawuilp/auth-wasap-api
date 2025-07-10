@@ -20,7 +20,7 @@ await initializeDatabase();
 app.use(helmet()); // Security headers
 app.use(cors({
   origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
-  methods: ['GET', 'POST'],
+  methods: ['GET', 'POST', 'OPTIONS'],
   credentials: true
 }));
 app.use(express.json());
