@@ -1,9 +1,10 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import jwt from 'jsonwebtoken';
-import { findUserById, createOrUpdateUser } from '../services/userService.js';
+import { findUserById, findUserByWhatsappNumber, createOrUpdateUser } from '../services/userService.js';
 import { sendWhatsAppOTP } from '../services/whatsappService.js';
 import { verifyToken } from '../middleware/auth.js';
+import bcrypt from 'bcryptjs';
 
 const router = express.Router();
 
@@ -28,16 +29,14 @@ router.post(
       }
 
       const { whatsappNumber } = req.body;
-      let user = await findUserById(whatsappNumber); // Using whatsapp_number as temporary ID
+      let user = await findUserByWhatsappNumber(whatsappNumber);
       const otp = await sendWhatsAppOTP(whatsappNumber);
+      const hashedOtp = await bcrypt.hash(otp, 10);
 
       await createOrUpdateUser({
-        id: user ? user.id : whatsappNumber,
-        name: user ? user.name : null,
-        webEmail: user ? user.webEmail : null,
+        id: user ? user.id : undefined, // Let Supabase generate UUID if new
         whatsappNumber,
-        conversationHistory: user ? user.conversationHistory : null,
-        verificationCode: otp,
+        verificationCode: hashedOtp,
         codeExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
         isVerified: user ? user.isVerified : false
       });
@@ -76,7 +75,7 @@ router.post(
       }
 
       const { whatsappNumber, otp } = req.body;
-      const user = await findUserById(whatsappNumber);
+      const user = await findUserByWhatsappNumber(whatsappNumber);
 
       if (!user) {
         return res.status(404).json({
@@ -85,16 +84,14 @@ router.post(
         });
       }
 
-      // Assuming verificationCode is handled externally or needs bcrypt
-      if (!user.isVerified && new Date() > new Date(user.codeExpiresAt)) {
+      if (!user.is_verified && new Date() > new Date(user.code_expires_at)) {
         return res.status(400).json({
           error: 'OTP expired',
           code: 'OTP_EXPIRED'
         });
       }
 
-      // Placeholder for OTP verification (adjust if using bcrypt)
-      const isValidOTP = otp === user.verificationCode; // Replace with proper comparison if encrypted
+      const isValidOTP = await bcrypt.compare(otp, user.verification_code);
       if (!isValidOTP) {
         return res.status(400).json({
           error: 'Invalid OTP',
@@ -104,10 +101,7 @@ router.post(
 
       await createOrUpdateUser({
         id: user.id,
-        name: user.name,
-        webEmail: user.webEmail,
         whatsappNumber,
-        conversationHistory: user.conversationHistory,
         isVerified: true,
         verificationCode: null,
         codeExpiresAt: null
@@ -148,10 +142,10 @@ router.get('/profile', verifyToken, async (req, res, next) => {
     const userData = {
       id: user.id,
       name: user.name,
-      webEmail: user.webEmail,
+      webEmail: user.web_email,
       whatsappNumber: user.whatsapp_number,
       conversationHistory: user.conversation_history,
-      createdAt: user.createdAt
+      createdAt: user.created_at
     };
 
     res.status(200).json(userData);
