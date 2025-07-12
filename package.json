@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "WhatsApp OTP Authentication API",
   "type": "module",
+  "engines": {
+    "node": ">=14.8.0"
+  },
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
